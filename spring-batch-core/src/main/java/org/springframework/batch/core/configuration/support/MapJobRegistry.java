@@ -22,22 +22,25 @@ import java.util.HashSet;
 import java.util.Map;
 
 import org.springframework.batch.core.Job;
+import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.DuplicateJobException;
 import org.springframework.batch.core.configuration.JobFactory;
 import org.springframework.batch.core.configuration.JobRegistry;
+import org.springframework.batch.core.configuration.StepRegistry;
 import org.springframework.batch.core.launch.NoSuchJobException;
 import org.springframework.util.Assert;
 
 /**
  * Simple map-based implementation of {@link JobRegistry}. Access to the map is
  * synchronized, guarded by an internal lock.
- * 
+ *
  * @author Dave Syer
- * 
+ *
  */
-public class MapJobRegistry implements JobRegistry {
+public class MapJobRegistry implements JobRegistry, StepRegistry {
 
-	private Map<String, JobFactory> map = new HashMap<String, JobFactory>();
+	private final Map<String, JobFactory> map = new HashMap<String, JobFactory>();
+    private final MapStepRegistry stepRegistry = new MapStepRegistry();
 
 	public void register(JobFactory jobFactory) throws DuplicateJobException {
 		Assert.notNull(jobFactory);
@@ -74,5 +77,17 @@ public class MapJobRegistry implements JobRegistry {
 			return Collections.unmodifiableCollection(new HashSet<String>(map.keySet()));
 		}
 	}
+
+    public void register(String jobName, Collection<Step> steps) {
+        stepRegistry.register(jobName, steps);
+    }
+
+    public void unregisterStepsFromJob(String jobName) {
+        stepRegistry.unregisterStepsFromJob(jobName);
+    }
+
+    public Step getStep(String jobName, String stepName) throws NoSuchJobException {
+        return stepRegistry.getStep(jobName, stepName);
+    }
 
 }
