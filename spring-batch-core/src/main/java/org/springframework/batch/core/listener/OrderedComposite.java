@@ -16,6 +16,7 @@
 package org.springframework.batch.core.listener;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -25,12 +26,16 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.core.annotation.Order;
+import org.springframework.util.Assert;
 
 /**
+ * A composite honoring the {@link Ordered} interface and the {@link Order}
+ * annotation.
+ *
  * @author Dave Syer
  * 
  */
-class OrderedComposite<S> {
+public class OrderedComposite<S> {
 
 	private List<S> unordered = new ArrayList<S>();
 
@@ -41,12 +46,33 @@ class OrderedComposite<S> {
 
 	private List<S> list = new ArrayList<S>();
 
+
+    /**
+     * Creates a new, empty instance.
+     */
+    public OrderedComposite() {
+        this.unordered = new ArrayList<S>();
+        this.ordered = new ArrayList<S>();
+        this.list = new ArrayList<S>();
+    }
+
+    /**
+     * Creates an instance with the specified initial items.
+     *
+     * @param items the items to add
+     */
+    public OrderedComposite(Collection<? extends S> items) {
+        this();
+        setItems(items);
+    }
+
 	/**
-	 * Public setter for the listeners.
-	 * 
-	 * @param items
-	 */
-	public void setItems(List<? extends S> items) {
+     * Sets the items to order. First cleans the content of the composite.
+     *
+     * @param items the items
+     */
+	public void setItems(Collection<? extends S> items) {
+        Assert.notNull(items, "items could not be null.");
 		unordered.clear();
 		ordered.clear();
 		for (S s : items) {
@@ -57,7 +83,7 @@ class OrderedComposite<S> {
 	/**
 	 * Register additional item.
 	 * 
-	 * @param item
+	 * @param item the item to add
 	 */
 	public void add(S item) {
 		if (item instanceof Ordered) {
@@ -78,6 +104,17 @@ class OrderedComposite<S> {
 		list.addAll(ordered);
 		list.addAll(unordered);
 	}
+
+    /**
+     * Returns a list containing the items, honoring the {@link Order}
+     * annotation. The {@link Ordered} items come first, followed by any
+     * unordered ones.
+     *
+     * @return an ordered list of items
+     */
+    public List<S> toList() {
+        return new ArrayList<S>(list);
+    }
 
 	/**
 	 * Public getter for the list of items. The {@link Ordered} items come
