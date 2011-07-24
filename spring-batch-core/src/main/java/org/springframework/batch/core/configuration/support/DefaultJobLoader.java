@@ -32,6 +32,7 @@ import org.springframework.batch.core.configuration.StepRegistry;
 import org.springframework.batch.core.launch.NoSuchJobException;
 import org.springframework.batch.core.step.StepLocator;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.util.Assert;
 
@@ -186,7 +187,7 @@ public class DefaultJobLoader implements JobLoader, InitializingBean {
 				JobFactory jobFactory = new ReferenceJobFactory(job);
 				jobRegistry.register(jobFactory);
 				jobsRegistered.add(jobName);
-                stepRegistry.register(job.getName(), getSteps(job));
+                stepRegistry.register(job.getName(), getSteps(job, context));
 
 			}
 
@@ -214,10 +215,11 @@ public class DefaultJobLoader implements JobLoader, InitializingBean {
      * Returns all the {@link Step} defined by the specified {@link Job}.
      *
      * @param job the given job
+     * @param jobApplicationContext the application context of the job
      * @return all the {@link Step} defined in the given job
      * @see StepLocator
      */
-    private Collection<Step> getSteps(final Job job) {
+    private Collection<Step> getSteps(final Job job, final ApplicationContext jobApplicationContext) {
         // TODO: that sounds like we need a stronger contract here
         if (!(job instanceof StepLocator)) {
             throw new UnsupportedOperationException("Cannot locate step from a Job that is not a StepLocator: job="
@@ -228,6 +230,17 @@ public class DefaultJobLoader implements JobLoader, InitializingBean {
         final Collection<Step> result = new ArrayList<Step>();
         for (String stepName : stepNames) {
             result.add(stepLocator.getStep(stepName));
+        }
+
+        // TODO: because some steps are referenced by name, we need to look in the context to see if there
+        // TODO: are more Step instances defined. Right now they are registered as being available in the
+        // TODO: context of the job but we have no idea if they are linked to that Job or not.
+        @SuppressWarnings("unchecked")
+        final Map<String, Step> allSteps = jobApplicationContext.getBeansOfType(Step.class);
+        for (Map.Entry<String, Step> entry : allSteps.entrySet()) {
+           if (!stepNames.contains(entry.getKey())) {
+               result.add(entry.getValue());
+           }
         }
         return result;
     }

@@ -16,7 +16,13 @@
 package org.springframework.batch.core.configuration.support;
 
 import org.junit.Test;
-import org.springframework.batch.core.*;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobExecution;
+import org.springframework.batch.core.JobParametersIncrementer;
+import org.springframework.batch.core.JobParametersValidator;
+import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.DuplicateJobException;
+import org.springframework.batch.core.configuration.JobFactory;
 import org.springframework.batch.core.configuration.JobRegistry;
 import org.springframework.batch.core.configuration.StepRegistry;
 import org.springframework.batch.core.launch.NoSuchJobException;
@@ -52,7 +58,38 @@ public class DefaultJobLoaderTests {
     private DefaultJobLoader jobLoader = new DefaultJobLoader(jobRegistry, stepRegistry);
 
     @Test
-    public void testLoadWithExplicitName() throws Exception {
+    public void createWithBothRegistries() {
+        final DefaultJobLoader loader = new DefaultJobLoader();
+        loader.setJobRegistry(jobRegistry);
+        loader.setStepRegistry(stepRegistry);
+
+        loader.afterPropertiesSet();
+    }
+
+    @Test
+    public void createWithJobRegistryWhichIsAStepRegistry() {
+        final DefaultJobLoader loader = new DefaultJobLoader();
+        loader.setJobRegistry(jobRegistry);
+
+        loader.afterPropertiesSet();
+    }
+
+    @Test
+    public void createWithSimpleJobRegistry() {
+        final DefaultJobLoader loader = new DefaultJobLoader();
+        loader.setJobRegistry(new JobRegistryMock());
+
+        try {
+            loader.afterPropertiesSet();
+            fail("Should have failed to create job loader without a step registry (" +
+                    "and the job registry could not fulfill that role)");
+        } catch (IllegalArgumentException e) {
+            // OK
+        }
+    }
+
+    @Test
+    public void testLoadWithExplicitName() throws DuplicateJobException {
         ClassPathXmlApplicationContextFactory factory = new ClassPathXmlApplicationContextFactory(
                 new ByteArrayResource(JOB_XML.getBytes()));
         jobLoader.load(factory);
@@ -62,7 +99,7 @@ public class DefaultJobLoaderTests {
     }
 
     @Test
-    public void testRegistryUpdated() throws Exception {
+    public void testRegistryUpdated() throws DuplicateJobException {
         ClassPathXmlApplicationContextFactory factory = new ClassPathXmlApplicationContextFactory(
                 new ClassPathResource("trivial-context.xml", getClass()));
         jobLoader.load(factory);
@@ -71,16 +108,27 @@ public class DefaultJobLoaderTests {
     }
 
     @Test
-    public void testMultipleJobsInTheSameContext() throws Exception {
+    public void testMultipleJobsInTheSameContext() throws DuplicateJobException {
         ClassPathXmlApplicationContextFactory factory = new ClassPathXmlApplicationContextFactory(
                 new ClassPathResource("job-context-with-steps.xml", getClass()));
         jobLoader.load(factory);
         assertEquals(2, jobRegistry.getJobNames().size());
-        assertStepExist("job1", "step11");
-        assertStepExist("job1", "step12");
-        assertStepExist("job2", "step21");
-        assertStepExist("job2", "step22");
+        assertStepExist("job1", "step11", "step12");
+        assertStepDoNotExist("job1", "step21", "step22");
+        assertStepExist("job2", "step21", "step22");
+        assertStepDoNotExist("job2", "step11", "step12");
+    }
 
+    @Test
+    public void testMultipleJobsInTheSameContextWithSeparateSteps() throws DuplicateJobException {
+        ClassPathXmlApplicationContextFactory factory = new ClassPathXmlApplicationContextFactory(
+                new ClassPathResource("job-context-with-separate-steps.xml", getClass()));
+        jobLoader.load(factory);
+        assertEquals(2, jobRegistry.getJobNames().size());
+        assertStepExist("job1", "step11", "step12", "genericStep1", "genericStep2");
+        assertStepDoNotExist("job1", "step21", "step22");
+        assertStepExist("job2", "step21", "step22", "genericStep1", "genericStep2");
+        assertStepDoNotExist("job2", "step11", "step12");
     }
 
     @Test
@@ -107,13 +155,29 @@ public class DefaultJobLoaderTests {
         assertStepExist(TEST_JOB_NAME, TEST_STEP_NAME);
     }
 
-    protected void assertStepExist(String jobName, String stepName) {
-        try {
-            stepRegistry.getStep(jobName, stepName);
-        } catch (NoSuchJobException e) {
-            fail("Job with name [" + jobName + "] should have been found.");
-        } catch (NoSuchStepException e) {
-            fail("Step with name [" + stepName + "] for job [" + jobName + "] should have been found.");
+    protected void assertStepExist(String jobName, String... stepNames) {
+        for (String stepName : stepNames) {
+            try {
+                stepRegistry.getStep(jobName, stepName);
+            } catch (NoSuchJobException e) {
+                fail("Job with name [" + jobName + "] should have been found.");
+            } catch (NoSuchStepException e) {
+                fail("Step with name [" + stepName + "] for job [" + jobName + "] should have been found.");
+            }
+        }
+    }
+
+    protected void assertStepDoNotExist(String jobName, String... stepNames) {
+        for (String stepName : stepNames) {
+            try {
+                final Step step = stepRegistry.getStep(jobName, stepName);
+                fail("Step with name [" + stepName + "] for job [" + jobName + "] should " +
+                        "not have been found but got [" + step + "]");
+            } catch (NoSuchJobException e) {
+                fail("Job with name [" + jobName + "] should have been found.");
+            } catch (NoSuchStepException e) {
+                // OK
+            }
         }
     }
 
@@ -150,6 +214,24 @@ public class DefaultJobLoaderTests {
 
         public Step getStep(String stepName) throws NoSuchStepException {
             throw new NoSuchStepException("Step [" + stepName + "] does not exist");
+        }
+    }
+
+    private static class JobRegistryMock implements JobRegistry {
+        public void register(JobFactory jobFactory) throws DuplicateJobException {
+            // dummy
+        }
+
+        public void unregister(String jobName) {
+            // dummy
+        }
+
+        public Collection<String> getJobNames() {
+            return Collections.emptyList();
+        }
+
+        public Job getJob(String name) throws NoSuchJobException {
+            throw new NoSuchJobException("Mock implementation does not hold any job.");
         }
     }
 
