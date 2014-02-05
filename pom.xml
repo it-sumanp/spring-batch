@@ -61,6 +61,31 @@
 	</properties>
 	<profiles>
 		<profile>
+			<id>dependencyReport</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>io.spring.platform.maven</groupId>
+						<artifactId>dependency-info-maven-plugin</artifactId>
+						<version>1.0.0.BUILD-SNAPSHOT</version>
+						<inherited>false</inherited>
+						<executions>
+							<execution>
+								<phase>prepare-package</phase>
+								<id>report</id>
+								<goals>
+									<goal>report</goal>
+								</goals>
+								<configuration>
+									<attach>true</attach>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+		<profile>
 			<id>all</id>
 			<modules>
 				<module>spring-batch-samples</module>
